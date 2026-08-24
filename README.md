@@ -244,3 +244,7 @@ query:
 ```bash
 uv run python3 -c "from platforms import spotify; print(spotify.search('Logic Moon', 'Atlas'))"
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE).
