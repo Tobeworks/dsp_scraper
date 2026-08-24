@@ -6,3 +6,5 @@ results.json
 test_bandcamp_results.json
 test_full_pipeline_results.json
 .claude
+.superpowers
+docs/superpowers
