@@ -12,7 +12,7 @@ JSON) to build on later.
 
 ## Supported platforms
 
-6 platforms are active by default (`main.PLATFORMS`). Match rates below are
+6 platforms are active by default (`core.PLATFORMS`). Match rates below are
 from the last full run against 15 real releases from logic-moon.de's own
 catalog (`uv run tests/test_full_pipeline.py`) - they reflect how much of an
 artist's real catalog actually turns up per platform, not scraper
@@ -28,7 +28,7 @@ correctness alone (a release genuinely not on a platform is a correct miss).
 | Beatport | 4/15 | ✅ works, low match rate mostly reflects Beatport's dance/DJ-focused catalog, not every release is there |
 
 4 more platforms are written but **disabled** - excluded from
-`main.PLATFORMS`, kept in `platforms/` for when a workaround is found (each
+`core.PLATFORMS`, kept in `platforms/` for when a workaround is found (each
 file is marked `DISABLED as of <date>` at the top):
 
 | Platform | Blocker |
@@ -54,23 +54,31 @@ uv run playwright install chromium   # downloads the Chromium browser for Playwr
 `uv run <script>` automatically uses the project-local `.venv` - no manual
 activation needed.
 
+Since `pyproject.toml` declares a proper build backend, dsp_scraper is
+also installable as a dependency of another project directly from GitHub:
+`pip install git+https://github.com/Tobeworks/dsp_scraper.git`, then
+`from dsp_scraper import find_release`. The installing project still
+needs its own Playwright browser install step
+(`playwright install --with-deps chromium`) - installing dsp_scraper
+doesn't run that automatically.
+
 ## Usage
 
 ```bash
 # write to a file (default: results.json)
-uv run main.py https://logicmoon.bandcamp.com/album/atlas
+uv run cli.py https://logicmoon.bandcamp.com/album/atlas
 
 # custom output path
-uv run main.py https://logicmoon.bandcamp.com/album/atlas -o out.json
+uv run cli.py https://logicmoon.bandcamp.com/album/atlas -o out.json
 
 # print JSON to stdout instead of writing a file (e.g. to pipe into a DB tool)
-uv run main.py --stdout https://logicmoon.bandcamp.com/album/atlas > release.json
+uv run cli.py --stdout https://logicmoon.bandcamp.com/album/atlas > release.json
 
 # no URL argument -> interactive prompt
-uv run main.py
+uv run cli.py
 
 # adjust the pause between platform searches (default: 1.5s)
-uv run main.py --delay 3 https://logicmoon.bandcamp.com/album/atlas
+uv run cli.py --delay 3 https://logicmoon.bandcamp.com/album/atlas
 ```
 
 Progress/status messages go to stderr, so `--stdout` always produces clean,
@@ -115,9 +123,9 @@ The core logic is separated from the CLI and directly importable, e.g. for
 a future DB writer:
 
 ```python
-from main import run
+from dsp_scraper import find_release
 
-result = run("https://logicmoon.bandcamp.com/album/atlas")
+result = find_release("https://logicmoon.bandcamp.com/album/atlas")
 # result is a dict in the schema above - write it to a DB here, for example
 ```
 
@@ -125,20 +133,23 @@ result = run("https://logicmoon.bandcamp.com/album/atlas")
 
 ```
 dsp_scraper/
-  pyproject.toml       # project/dependency definition (uv)
-  main.py              # CLI entry point & orchestration (run(), PLATFORMS)
-  bandcamp.py          # scrape_release(url) -> ReleaseInfo
-  matching.py          # Candidate/MatchResult, score(), pick_best()
-  platforms/
-    _common.py           # shared Playwright new_page() context manager
-    spotify.py, apple_music.py, deezer.py, amazon_music.py, soundcloud.py,
-    beatport.py          # active (in main.PLATFORMS)
-    youtube_music.py, tidal.py, napster.py, pandora.py
-                          # written but disabled, see Supported platforms above
+  pyproject.toml       # project/dependency definition (uv) + build-system (hatchling)
+  cli.py                # CLI entry point (argparse, --stdout/--output/--delay)
+  src/dsp_scraper/
+    __init__.py           # exposes find_release
+    core.py                # find_release(), PLATFORMS
+    bandcamp.py            # scrape_release(url) -> ReleaseInfo
+    matching.py            # Candidate/MatchResult, score(), pick_best()
+    platforms/
+      _common.py             # shared Playwright new_page() context manager
+      spotify.py, apple_music.py, deezer.py, amazon_music.py, soundcloud.py,
+      beatport.py            # active (in core.PLATFORMS)
+      youtube_music.py, tidal.py, napster.py, pandora.py
+                              # written but disabled, see Supported platforms above
   tests/
     test_bandcamp.py       # smoke test: bandcamp.py against 15 real Bandcamp URLs
     test_platform.py       # smoke test: one platform's search() against the same 15 releases
-    test_full_pipeline.py  # smoke test: full run() (all active platforms) against the same 15
+    test_full_pipeline.py  # smoke test: full find_release() (all active platforms) against the same 15
 ```
 
 Every platform module follows the same shape: a `search(artist: str, title:
@@ -201,7 +212,7 @@ before touching a platform module:**
   a result, and update the selector constant in that module.
 - **No retry/backoff, no caching, no logging framework** - left out on
   purpose for v1 (YAGNI). A single `try/except Exception` per platform in
-  `main.run()` is enough to isolate a failing run.
+  `core.find_release()` is enough to isolate a failing run.
 - **User-agent spoofing** in `platforms/_common.py`, since several
   platforms otherwise flag headless Chromium as a bot and show a
   captcha/block page.
