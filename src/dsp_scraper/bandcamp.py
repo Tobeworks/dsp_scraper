@@ -66,7 +66,7 @@ def scrape_release(url: str) -> ReleaseInfo:
     Tries schema.org JSON-LD first, falls back to og:title, then to raw
     page markup. Raises RuntimeError if none of them yield both fields."""
     hostname = urlparse(url).hostname
-    if hostname is None or not hostname.endswith("bandcamp.com"):
+    if hostname is None or not (hostname == "bandcamp.com" or hostname.endswith(".bandcamp.com")):
         raise ValueError(f"not a bandcamp.com URL: {url}")
 
     resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=10)
