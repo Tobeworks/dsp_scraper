@@ -1,6 +1,6 @@
 """Search Napster for a release.
 
-DISABLED as of 2026-08-23: excluded from main.PLATFORMS. Napster's product
+DISABLED as of 2026-08-23: excluded from core.PLATFORMS. Napster's product
 appears to have pivoted away from music search for anonymous visitors (see
 RESULT_SELECTOR note below). Module kept importable/testable for when a
 workaround is found - see README "known limitations".

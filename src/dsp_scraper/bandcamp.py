@@ -65,6 +65,10 @@ def scrape_release(url: str) -> ReleaseInfo:
     """Fetch a Bandcamp release page and extract artist/title/release_type.
     Tries schema.org JSON-LD first, falls back to og:title, then to raw
     page markup. Raises RuntimeError if none of them yield both fields."""
+    hostname = urlparse(url).hostname
+    if hostname is None or not hostname.endswith("bandcamp.com"):
+        raise ValueError(f"not a bandcamp.com URL: {url}")
+
     resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=10)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")

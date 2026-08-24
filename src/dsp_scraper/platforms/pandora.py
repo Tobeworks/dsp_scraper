@@ -1,6 +1,6 @@
 """Search Pandora for a release.
 
-DISABLED as of 2026-08-23: excluded from main.PLATFORMS. Pandora is
+DISABLED as of 2026-08-23: excluded from core.PLATFORMS. Pandora is
 US/AU/NZ-only and redirects other regions to /restricted. Module kept
 importable/testable for when a workaround is found - see README "known
 limitations".

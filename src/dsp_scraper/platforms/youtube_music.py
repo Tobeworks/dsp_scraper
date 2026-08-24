@@ -1,6 +1,6 @@
 """Search YouTube Music for a release.
 
-DISABLED as of 2026-08-23: excluded from main.PLATFORMS. EU visitors hit a
+DISABLED as of 2026-08-23: excluded from core.PLATFORMS. EU visitors hit a
 Google cookie-consent wall that the best-effort dismiss below hasn't beaten
 reliably (see _dismiss_consent_wall). Module kept importable/testable for
 when a workaround is found - see README "known limitations".

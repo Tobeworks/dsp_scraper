@@ -18,9 +18,13 @@ logic into the API repo.
   **`--workers 1` means the whole API is effectively single-threaded** - a
   multi-minute request blocks every other endpoint (mailer, leads,
   licensing, rankings, ...) until it finishes.
-- Already runs Selenium + Chrome in the same container for
-  `ScreenshotsResource` (browser automation is an established pattern
-  here).
+- Runs Selenium + Chrome for `ScreenshotsResource`, but only in local dev
+  (`if __name__ == "__main__":` in server.py) - NOT under the
+  gunicorn/Cloud Run deployment, which has no Chrome binary installed at
+  all. This endpoint (with Playwright+Chromium) will be the first browser
+  automation actually running in the deployed container - a real
+  consideration for the memory/image-size discussion below, not an
+  established pattern to lean on.
 - Existing precedent for exactly this shape of feature: `SonglinkProxy`
   (`api/api_songlink.py`), a thin Resource that proxies to the (now
   deprecated) `api.song.link` API and returns its JSON response as-is,

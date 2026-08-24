@@ -2,7 +2,7 @@
 name = "dsp-scraper"
 version = "0.1.0"
 description = "Find a Bandcamp release on other DSPs by scraping, output as JSON"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.15.0",
     "playwright>=1.62.0",

@@ -1,6 +1,6 @@
 """Search Tidal for a release.
 
-DISABLED as of 2026-08-23: excluded from main.PLATFORMS. Anonymous search
+DISABLED as of 2026-08-23: excluded from core.PLATFORMS. Anonymous search
 page consistently renders no usable result DOM (see RESULT_SELECTOR note
 below). Module kept importable/testable for when a workaround is found -
 see README "known limitations".
