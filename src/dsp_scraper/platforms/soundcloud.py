@@ -75,7 +75,18 @@ def search(artist: str, title: str) -> list[Candidate]:
     clean titles, plain merged scoring already gets both right: real sets
     win their ties, and an unrelated artist's same-named album (e.g. "Moon
     Glow" by Benny Goodman for reference "Glow") no longer scores high
-    enough to beat the correct track."""
+    enough to beat the correct track.
+
+    ponytail: known limitation, not fixed - a release credited to a
+    pseudonym/sub-project on Bandcamp (e.g. "Aethery Fields") can be
+    reposted under the parent label's main SoundCloud channel (e.g. "Logic
+    Moon"), so the candidate's displayed artist and the Bandcamp artist
+    share no text in common even for the correct match. No threshold
+    change fixes this without also readmitting real false positives with a
+    similar score (verified live 2026-08-24: lowering the threshold enough
+    to catch this case also matches an unrelated "The Magnetic Fields"
+    track). Would need an explicit pseudonym/alias mapping to fix
+    properly - out of scope unless asked for."""
     query = quote(f"{artist} {title}")
     with new_page() as page:
         albums = _candidates_from(page, ALBUM_SEARCH_URL.format(query=query))
