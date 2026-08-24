@@ -3,8 +3,8 @@ from urllib.parse import quote, urljoin
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
-from matching import Candidate
-from platforms._common import SEARCH_TIMEOUT_MS, new_page
+from dsp_scraper.matching import Candidate
+from dsp_scraper.platforms._common import SEARCH_TIMEOUT_MS, new_page
 
 SEARCH_URL = "https://www.beatport.com/search?q={query}"
 # verified live 2026-08-23: each release link's closest <li> ancestor's text

@@ -3,8 +3,8 @@ from urllib.parse import quote, urljoin
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
-from matching import Candidate
-from platforms._common import SEARCH_TIMEOUT_MS, new_page
+from dsp_scraper.matching import Candidate
+from dsp_scraper.platforms._common import SEARCH_TIMEOUT_MS, new_page
 
 SEARCH_URL = "https://open.spotify.com/search/{query}"
 ORIGIN = "https://open.spotify.com"
