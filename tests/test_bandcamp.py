@@ -8,13 +8,10 @@ inspection. URLs pulled from logic-moon.de's own release catalog
 (logicmoon_astro/src/releases.js).
 """
 import json
-import sys
 from dataclasses import asdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so `import bandcamp` etc. find the project root
-
-from bandcamp import scrape_release
+from dsp_scraper.bandcamp import scrape_release
 
 RESULTS_FILE = Path(__file__).parent / "test_bandcamp_results.json"
 

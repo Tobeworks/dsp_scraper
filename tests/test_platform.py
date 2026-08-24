@@ -7,18 +7,15 @@ Faster than test_full_pipeline.py when only one platform needs re-checking
 """
 import importlib
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so `import bandcamp` etc. find the project root
-
-from bandcamp import scrape_release
-from matching import pick_best
+from dsp_scraper.bandcamp import scrape_release
+from dsp_scraper.matching import pick_best
 from test_bandcamp import SAMPLE_URLS
 
 
 def main():
     platform_name = sys.argv[1] if len(sys.argv) > 1 else "apple_music"
-    platform = importlib.import_module(f"platforms.{platform_name}")
+    platform = importlib.import_module(f"dsp_scraper.platforms.{platform_name}")
 
     matched = 0
     for url in SAMPLE_URLS:

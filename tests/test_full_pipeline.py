@@ -1,5 +1,6 @@
-"""Full-pipeline smoke test: run main.run() (Bandcamp + every active
-platform in main.PLATFORMS) against every sample URL, not just one release.
+"""Full-pipeline smoke test: run dsp_scraper.find_release() (Bandcamp +
+every active platform in dsp_scraper.core.PLATFORMS) against every sample
+URL, not just one release.
 
 Hits the network heavily (active platforms x 15 releases) - not a unit
 test, not run in CI, takes several minutes. Run manually:
@@ -9,12 +10,9 @@ Writes full per-release results to tests/test_full_pipeline_results.json
 and prints a per-platform match-rate summary.
 """
 import json
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so `import main` etc. find the project root
-
-from main import run
+from dsp_scraper import find_release
 from test_bandcamp import SAMPLE_URLS
 
 RESULTS_FILE = Path(__file__).parent / "test_full_pipeline_results.json"
@@ -28,7 +26,7 @@ def main():
     for i, url in enumerate(SAMPLE_URLS, 1):
         print(f"\n[{i}/{total}] {url}")
         try:
-            result = run(url)
+            result = find_release(url)
         except Exception as exc:
             print(f"  FATAL (bandcamp scrape failed): {type(exc).__name__}: {exc}")
             all_results.append({"source_url": url, "error": str(exc)})
