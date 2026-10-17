@@ -82,9 +82,18 @@ class ResolveSourceTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 resolve_source(url)
 
-    def test_deezer_track_url_rejected_in_phase_1(self):
+    def test_deezer_track(self):
+        url = "https://www.deezer.com/track/123"
+        payload = {"title": "Ewiger Wald", "artist": {"name": "Logic Moon"}}
+        with mock.patch("requests.get", _fake_get("", payload)):
+            info = resolve_source(url)
+        self.assertEqual(info.release_type, "track")
+        self.assertEqual(info.title, "Ewiger Wald")
+        self.assertEqual(info.artist, "Logic Moon")
+
+    def test_deezer_non_release_url_rejected(self):
         with self.assertRaises(ValueError):
-            resolve_source("https://www.deezer.com/de/track/123")
+            resolve_source("https://www.deezer.com/de/artist/123")
 
     def test_soundcloud_set_artist_from_slug(self):
         url = "https://soundcloud.com/logic-moon/sets/it-may-never-coming-back"
@@ -126,6 +135,24 @@ class ResolveSourceTests(unittest.TestCase):
                 resolve_source("https://soundcloud.com/logic-moon")
 
 
+class AppleCardArtistTests(unittest.TestCase):
+    """Apple Music search cards come in three layouts (see apple_music.py)."""
+
+    def test_artist_from_each_card_layout(self):
+        from dsp_scraper.platforms.apple_music import _artist_from_container
+
+        self.assertEqual(
+            _artist_from_container("Memories Of Tomorrow - EP\nAlbum · Logic Moon"), "Logic Moon"
+        )  # top results
+        self.assertEqual(
+            _artist_from_container("Echoes of Tomorrow\nEchoes of Tomorrow\n\nLegaG6"), "LegaG6"
+        )  # grid
+        self.assertEqual(
+            _artist_from_container("Reminiscence - Single          Reminiscence - Single          Logic Moon"),
+            "Logic Moon",
+        )  # one line
+
+
 class FakePage:
     def __init__(self, title: str):
         self._title = title
@@ -140,35 +167,150 @@ class FakePage:
         return self._title
 
 
+def _with_fake_page(doc_title: str):
+    """Patch the browser so sources.py sees a page with this document title."""
+    from contextlib import contextmanager
+
+    @contextmanager
+    def fake_new_page():
+        yield FakePage(doc_title)
+
+    return mock.patch("dsp_scraper.sources.new_page", fake_new_page)
+
+
 class SpotifyResolverTests(unittest.TestCase):
     """Browser is faked: only the title parsing is under test here."""
 
-    URL = "https://open.spotify.com/intl-de/album/5eWWBbvppe4J2ZgKd2yLDV?si=ck4ei6EsSaG1PUETB77f0w"
-
-    def _resolve(self, doc_title: str):
-        from contextlib import contextmanager
-
-        @contextmanager
-        def fake_new_page():
-            yield FakePage(doc_title)
-
-        with mock.patch("dsp_scraper.sources.new_page", fake_new_page):
-            return resolve_source(self.URL)
+    ALBUM = "https://open.spotify.com/intl-de/album/5eWWBbvppe4J2ZgKd2yLDV?si=ck4ei6EsSaG1PUETB77f0w"
+    TRACK = "https://open.spotify.com/track/7kTKqDWQ3z5XR8HIahtGBa"
 
     def test_album_title_and_artists_from_document_title(self):
-        info = self._resolve("Listen to Miracles - EP by Logic Moon, Diogene | Spotify")
+        with _with_fake_page("Listen to Miracles - EP by Logic Moon, Diogene | Spotify"):
+            info = resolve_source(self.ALBUM)
         self.assertEqual(info.platform, "spotify")
         self.assertEqual(info.title, "Miracles - EP")
         self.assertEqual(info.artist, "Logic Moon, Diogene")
         self.assertEqual(info.release_type, "album")
 
-    def test_unexpected_title_raises(self):
-        with self.assertRaises(RuntimeError):
-            self._resolve("Spotify – Web Player")
+    def test_track_title_and_artists_from_document_title(self):
+        with _with_fake_page("The Golden Dawn - song and lyrics by Logic Moon | Spotify"):
+            info = resolve_source(self.TRACK)
+        self.assertEqual(info.title, "The Golden Dawn")
+        self.assertEqual(info.artist, "Logic Moon")
+        self.assertEqual(info.release_type, "track")
 
-    def test_track_url_rejected(self):
-        with self.assertRaises(ValueError):
-            resolve_source("https://open.spotify.com/track/abc")
+    def test_unexpected_title_raises(self):
+        with _with_fake_page("Spotify – Web Player"):
+            with self.assertRaises(RuntimeError):
+                resolve_source(self.ALBUM)
+
+
+class AmazonResolverTests(unittest.TestCase):
+    def test_album_title_and_artists_from_document_title(self):
+        with _with_fake_page("Play Miracles by Logic Moon & Diogene on Amazon Music Unlimited"):
+            info = resolve_source("https://music.amazon.com/albums/B0GY5W4M3J")
+        self.assertEqual(info.platform, "amazon_music")
+        self.assertEqual(info.title, "Miracles")
+        self.assertEqual(info.artist, "Logic Moon & Diogene")
+
+    def test_other_wording_raises_instead_of_guessing(self):
+        with _with_fake_page("Miracles von Logic Moon auf Amazon Music"):
+            with self.assertRaises(RuntimeError):
+                resolve_source("https://music.amazon.de/albums/B0GY5W4M3J")
+
+
+class SmartLinkTests(unittest.TestCase):
+    URL = "https://too.fm/2mozry1"
+
+    @staticmethod
+    def _cd(payload: dict) -> str:
+        import base64
+
+        raw = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+        return raw
+
+    def _href(self, payload: dict) -> str:
+        return f"https://api.ffm.to/sl/e/c/2mozry1?cd={self._cd(payload)}"
+
+    def test_destinations_parsed_from_rendered_links(self):
+        from contextlib import contextmanager
+
+        hrefs = [
+            self._href({"srvc": "spotify", "destUrl": "https://open.spotify.com/album/5eWW?1100ljU3P"}),
+            self._href({"srvc": "apple", "destUrl": "https://geo.music.apple.com/de/album/miracles-ep/1895325249?app=music&ct=x"}),
+            self._href({"srvc": "deezer", "destUrl": "https://www.deezer.com/album/97000438"}),
+            self._href({"srvc": "tidal", "destUrl": "http://www.tidal.com/album/51835788"}),
+        ]
+
+        class LinkPage:
+            def goto(self, url, timeout=None):
+                pass
+
+            def wait_for_selector(self, selector, timeout=None):
+                pass
+
+            def eval_on_selector_all(self, selector, script):
+                return hrefs
+
+        @contextmanager
+        def fake_new_page():
+            yield LinkPage()
+
+        with mock.patch("dsp_scraper.sources.new_page", fake_new_page):
+            from dsp_scraper.sources import _smartlink_destinations
+
+            dests = _smartlink_destinations(self.URL)
+        self.assertEqual(dests["spotify"], "https://open.spotify.com/album/5eWW")
+        self.assertEqual(dests["apple_music"], "https://music.apple.com/de/album/miracles-ep/1895325249")
+        self.assertEqual(dests["deezer"], "https://www.deezer.com/album/97000438")
+        self.assertNotIn("tidal", dests)  # not one of our platforms
+
+    def test_release_resolved_from_first_working_destination(self):
+        dests = {
+            "apple_music": "https://music.apple.com/de/album/miracles-ep/1895325249",
+            "deezer": "https://www.deezer.com/album/97000438",
+        }
+        resolved = ReleaseInfo(artist="Logic Moon, Diogene", title="Miracles - EP", release_type="album",
+                               url=dests["deezer"], platform="deezer")
+
+        def fake_resolve(url):
+            if "apple" in url:
+                raise RuntimeError("apple metadata broken")
+            return resolved
+
+        with mock.patch("dsp_scraper.sources._smartlink_destinations", return_value=dests), \
+                mock.patch("dsp_scraper.sources.resolve_source", side_effect=fake_resolve):
+            from dsp_scraper.sources import _smartlink_source
+
+            info = _smartlink_source(self.URL)
+        self.assertEqual(info.platform, "smart_link")
+        self.assertEqual(info.url, self.URL)
+        self.assertEqual(info.title, "Miracles - EP")
+        self.assertEqual(info.links, dests)
+
+    def test_cd_token_roundtrip_handles_missing_padding(self):
+        from dsp_scraper.sources import _decode_cd
+
+        self.assertEqual(_decode_cd(self._cd({"srvc": "deezer", "destUrl": "x"})), {"srvc": "deezer", "destUrl": "x"})
+
+
+class FindReleaseSmartLinkTests(unittest.TestCase):
+    def test_smart_link_destinations_are_taken_not_searched(self):
+        info = ReleaseInfo(
+            artist="Logic Moon, Diogene", title="Miracles - EP", release_type="album",
+            url="https://too.fm/2mozry1", platform="smart_link",
+            links={"deezer": "https://www.deezer.com/album/97000438", "spotify": "https://open.spotify.com/album/5eWW"},
+        )
+        fakes = {name: FakePlatform() for name in core.PLATFORMS}
+        with mock.patch("dsp_scraper.core.PLATFORMS", fakes), \
+                mock.patch("dsp_scraper.core.resolve_source", return_value=info):
+            result = core.find_release(info.url, platform_delay=0)
+        self.assertEqual(fakes["deezer"].calls, [])
+        self.assertEqual(fakes["spotify"].calls, [])
+        self.assertEqual(len(fakes["apple_music"].calls), 1)
+        self.assertEqual(result["results"]["deezer"]["url"], "https://www.deezer.com/album/97000438")
+        self.assertEqual(result["results"]["deezer"]["confidence"], 100.0)
+        self.assertEqual(result["source"]["platform"], "smart_link")
 
 
 class FakePlatform:

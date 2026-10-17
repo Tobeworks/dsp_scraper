@@ -23,17 +23,23 @@ platform.
 
 | Source | Example | Resolved via | Status |
 |---|---|---|---|
-| Bandcamp | `https://logicmoon.bandcamp.com/album/atlas` | JSON-LD / `og:title` | ✅ phase 1 |
-| Apple Music | `https://music.apple.com/us/album/<slug>/<id>` | `og:title` | ✅ phase 1 |
-| Deezer | `https://www.deezer.com/de/album/<id>` | `og:title` + `api.deezer.com` (no key) | ✅ phase 1, album URLs only |
-| SoundCloud | `https://soundcloud.com/<artist>/sets/<slug>` | `og:title` + URL slug | ✅ phase 1 (artist from slug, collab accounts may differ) |
-| Spotify | `https://open.spotify.com/album/<id>` | browser (Playwright), document title | ✅ phase 2, album URLs only |
-| Beatport | `https://www.beatport.com/release/<slug>/<id>` | needs a browser (Cloudflare) | ⏳ phase 2 |
-| Smart links (too.fm etc.) | `https://too.fm/<id>` | needs a browser | ⏳ phase 2 |
-| Amazon Music | `https://music.amazon.com/albums/<id>` | not yet checked | ⏳ phase 2 |
+| Bandcamp | `https://logicmoon.bandcamp.com/album/atlas` | JSON-LD / `og:title` | ✅ works (plain HTTP) |
+| Apple Music | `https://music.apple.com/us/album/<slug>/<id>` | `og:title` | ✅ works (plain HTTP), album and `?i=` track URLs |
+| Deezer | `https://www.deezer.com/<lang>/album/<id>` or `/track/<id>` | `api.deezer.com` (no key) | ✅ works (plain HTTP) |
+| SoundCloud | `https://soundcloud.com/<artist>/sets/<slug>` or `/<artist>/<track>` | `og:title` + URL slug | ✅ works (plain HTTP, artist from slug, collab accounts may differ) |
+| Spotify | `https://open.spotify.com/album/<id>` or `/track/<id>` | browser, document title | ✅ works (Playwright) |
+| Amazon Music | `https://music.amazon.com/albums/<id>` | browser, document title | ✅ works for the `.com` storefront (Playwright), album URLs only |
+| Smart links | `https://too.fm/<id>`, `https://ffm.to/<id>` | browser, the platform links on the page | ✅ works (Playwright), see below |
+| Beatport | `https://www.beatport.com/release/<slug>/<id>` | — | ❌ not supported: Cloudflare challenge, also in a real browser |
 
-Any other host fails with an error that lists the supported hosts. Deezer and
-Spotify track URLs are rejected for now, the error says so.
+**Smart links:** the page lists a link per platform. Each one carries its
+destination as base64 JSON in `?cd=`. The scraper reads those links, resolves
+the release metadata from the first destination that works (Apple, Deezer,
+Spotify), and takes the page's platform links as results with confidence 100.
+Only the remaining platforms are searched. The `source` block then contains a
+`links` map with the platform URLs found on the page.
+
+Any other host fails with an error that lists the supported hosts.
 
 ## Supported platforms
 
@@ -143,9 +149,11 @@ directly parseable JSON on stdout.
 ```
 
 `source.platform` is the platform of the URL you passed in (`bandcamp`,
-`apple_music`, `deezer`, `soundcloud`). Before version 2.0 it was always
-`"bandcamp"`. The source platform's own entry is the source URL with
-`confidence` 100.0, it is not searched.
+`apple_music`, `deezer`, `soundcloud`, `spotify`, `amazon_music`, or
+`smart_link` for a link page). Before version 2.0 it was always `"bandcamp"`.
+The source platform's own entry is the source URL with `confidence` 100.0, it
+is not searched. `source.links` is empty except for smart links, where it maps
+each platform found on the page to its URL.
 
 Every platform always has the same 5 fields (`url`, `matched_title`,
 `matched_artist`, `confidence`, `error`), whether or not a match was found.
@@ -180,8 +188,8 @@ dsp_scraper/
   src/dsp_scraper/
     __init__.py           # exposes find_release
     core.py                # find_release(), PLATFORMS
-    sources.py             # resolve_source(url) -> ReleaseInfo, one resolver per source host
-    types.py               # ReleaseInfo (artist, title, release_type, url, platform)
+    sources.py             # resolve_source(url) -> ReleaseInfo, one resolver per source host (incl. smart links)
+    types.py               # ReleaseInfo (artist, title, release_type, url, platform, links)
     bandcamp.py            # scrape_release(url) -> ReleaseInfo (Bandcamp resolver)
     matching.py            # Candidate/MatchResult, score(), pick_best()
     platforms/

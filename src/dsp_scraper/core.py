@@ -52,16 +52,19 @@ def find_release(source_url: str, platform_delay: float = DEFAULT_PLATFORM_DELAY
     results = {}
     searched_before = False
     for name, module in PLATFORMS.items():
-        if name == release.platform:
+        # a link the source itself gives us (source platform, or a smart link's
+        # destination) is taken as-is, no search needed
+        direct_url = release.url if name == release.platform else release.links.get(name)
+        if direct_url:
             results[name] = asdict(
                 MatchResult(
-                    url=release.url,
+                    url=direct_url,
                     matched_title=release.title,
                     matched_artist=release.artist,
                     confidence=100.0,
                 )
             )
-            print(f"{name}: source platform, taken from source URL", file=sys.stderr)
+            print(f"{name}: taken from source ({'source URL' if name == release.platform else 'smart link'})", file=sys.stderr)
             continue
         if searched_before:
             time.sleep(platform_delay)

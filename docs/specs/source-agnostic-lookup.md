@@ -1,6 +1,12 @@
 # Spec: Quell-URL-agnostische Release-Suche
 
-Status: **Phase 1 umgesetzt (Version 2.0)**. Phase 2 (Browser-Resolver) ist offen.
+Status: **Phase 1 und Phase 2 umgesetzt (Version 2.0)**.
+
+Stand der Phase 2:
+- Spotify (Album und Track), Amazon Music (Album, `.com`) und Smart Links (too.fm, ffm.to) laufen über den Browser.
+- Smart Links liefern die Plattform-Links der Seite direkt (Confidence 100). Nur die übrigen Plattformen werden gesucht. Die Quellen-Auflösung läuft über die Seite (Ziel-Links aus dem `cd`-Parameter), nicht über Odesli.
+- Beatport ist nicht unterstützt: Cloudflare-Challenge, auch im Browser.
+- Freitext-Suche (Phase 3) ist weiterhin offen.
 
 ## 1. Ziel
 
