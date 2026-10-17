@@ -1,20 +1,23 @@
 """Resolve a platform release URL to artist/title/release_type.
 
 Phase 1 (spec: docs/specs/source-agnostic-lookup.md): Bandcamp, Apple Music,
-Deezer (album), SoundCloud. All plain HTTP, no browser. Spotify, Beatport,
-Amazon and smart links come in phase 2.
+Deezer (album), SoundCloud. All plain HTTP, no browser. Spotify album is the
+first phase 2 resolver (needs a browser, see _spotify_source). Beatport,
+Amazon and smart links are still open.
 """
 import re
 from urllib.parse import parse_qs, urlparse
 
 import requests
 from bs4 import BeautifulSoup
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from dsp_scraper.bandcamp import USER_AGENT, scrape_release
+from dsp_scraper.platforms._common import SEARCH_TIMEOUT_MS, new_page
 from dsp_scraper.types import ReleaseInfo
 
 REQUEST_TIMEOUT_S = 10
-SUPPORTED_HOSTS = ["bandcamp.com", "music.apple.com", "deezer.com", "soundcloud.com"]
+SUPPORTED_HOSTS = ["bandcamp.com", "music.apple.com", "deezer.com", "soundcloud.com", "open.spotify.com"]
 
 
 def _fetch_soup(url: str) -> BeautifulSoup:
@@ -102,12 +105,41 @@ def _soundcloud_source(url: str) -> ReleaseInfo:
     )
 
 
+_SPOTIFY_TITLE = re.compile(r"^Listen to (?P<title>.+) by (?P<artist>.+) \| Spotify$")
+
+
+def _spotify_source(url: str) -> ReleaseInfo:
+    # Spotify serves no metadata without JavaScript (no og:title, no JSON-LD),
+    # so this needs a browser. The document title is only set after render:
+    # "Listen to <Title> by <Artists> | Spotify". Album URLs only for now.
+    if "/album/" not in urlparse(url).path:
+        raise ValueError(f"only Spotify album URLs are supported for now: {url}")
+    with new_page() as page:
+        page.goto(url, timeout=SEARCH_TIMEOUT_MS)
+        try:
+            page.wait_for_function("document.title.startsWith('Listen to')", timeout=SEARCH_TIMEOUT_MS)
+        except PlaywrightTimeoutError:
+            raise RuntimeError(f"could not read Spotify release info from {url}")
+        doc_title = page.title()
+    match = _SPOTIFY_TITLE.match(doc_title)
+    if not match:
+        raise RuntimeError(f"unexpected Spotify page title {doc_title!r} for {url}")
+    return ReleaseInfo(
+        artist=match["artist"].strip(),
+        title=match["title"].strip(),
+        release_type="album",
+        url=url,
+        platform="spotify",
+    )
+
+
 _HOST_RESOLVERS = {
     "music.apple.com": _apple_source,
     "deezer.com": _deezer_source,
     "www.deezer.com": _deezer_source,
     "soundcloud.com": _soundcloud_source,
     "m.soundcloud.com": _soundcloud_source,
+    "open.spotify.com": _spotify_source,
 }
 
 

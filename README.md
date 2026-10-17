@@ -27,13 +27,13 @@ platform.
 | Apple Music | `https://music.apple.com/us/album/<slug>/<id>` | `og:title` | ✅ phase 1 |
 | Deezer | `https://www.deezer.com/de/album/<id>` | `og:title` + `api.deezer.com` (no key) | ✅ phase 1, album URLs only |
 | SoundCloud | `https://soundcloud.com/<artist>/sets/<slug>` | `og:title` + URL slug | ✅ phase 1 (artist from slug, collab accounts may differ) |
-| Spotify | `https://open.spotify.com/album/<id>` | needs a browser | ⏳ phase 2 |
+| Spotify | `https://open.spotify.com/album/<id>` | browser (Playwright), document title | ✅ phase 2, album URLs only |
 | Beatport | `https://www.beatport.com/release/<slug>/<id>` | needs a browser (Cloudflare) | ⏳ phase 2 |
 | Smart links (too.fm etc.) | `https://too.fm/<id>` | needs a browser | ⏳ phase 2 |
 | Amazon Music | `https://music.amazon.com/albums/<id>` | not yet checked | ⏳ phase 2 |
 
-Any other host fails with an error that lists the supported hosts. Deezer
-track URLs and Spotify URLs are rejected for now, the error says so.
+Any other host fails with an error that lists the supported hosts. Deezer and
+Spotify track URLs are rejected for now, the error says so.
 
 ## Supported platforms
 

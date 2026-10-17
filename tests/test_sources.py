@@ -106,7 +106,7 @@ class ResolveSourceTests(unittest.TestCase):
 
     def test_unsupported_host_lists_supported_hosts(self):
         with self.assertRaises(ValueError) as ctx:
-            resolve_source("https://open.spotify.com/album/5cRFOsGT9aFprlVqCbRstu")
+            resolve_source("https://www.beatport.com/release/the-north/5594159")
         self.assertIn("Supported:", str(ctx.exception))
         self.assertIn("music.apple.com", str(ctx.exception))
 
@@ -124,6 +124,51 @@ class ResolveSourceTests(unittest.TestCase):
         with mock.patch("requests.get", _fake_get(_fixture("soundcloud_set_head.html"))):
             with self.assertRaises(RuntimeError):
                 resolve_source("https://soundcloud.com/logic-moon")
+
+
+class FakePage:
+    def __init__(self, title: str):
+        self._title = title
+
+    def goto(self, url, timeout=None):
+        pass
+
+    def wait_for_function(self, expression, timeout=None):
+        pass
+
+    def title(self):
+        return self._title
+
+
+class SpotifyResolverTests(unittest.TestCase):
+    """Browser is faked: only the title parsing is under test here."""
+
+    URL = "https://open.spotify.com/intl-de/album/5eWWBbvppe4J2ZgKd2yLDV?si=ck4ei6EsSaG1PUETB77f0w"
+
+    def _resolve(self, doc_title: str):
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_new_page():
+            yield FakePage(doc_title)
+
+        with mock.patch("dsp_scraper.sources.new_page", fake_new_page):
+            return resolve_source(self.URL)
+
+    def test_album_title_and_artists_from_document_title(self):
+        info = self._resolve("Listen to Miracles - EP by Logic Moon, Diogene | Spotify")
+        self.assertEqual(info.platform, "spotify")
+        self.assertEqual(info.title, "Miracles - EP")
+        self.assertEqual(info.artist, "Logic Moon, Diogene")
+        self.assertEqual(info.release_type, "album")
+
+    def test_unexpected_title_raises(self):
+        with self.assertRaises(RuntimeError):
+            self._resolve("Spotify – Web Player")
+
+    def test_track_url_rejected(self):
+        with self.assertRaises(ValueError):
+            resolve_source("https://open.spotify.com/track/abc")
 
 
 class FakePlatform:
