@@ -1,4 +1,5 @@
 """Search Apple Music for a release."""
+import re
 from urllib.parse import quote, urljoin
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -15,19 +16,15 @@ RESULT_SELECTOR = 'a[href*="/album/"]:not([href*="?i="])'
 ORIGIN = "https://music.apple.com"
 
 
-def _extract_title_artist(text: str) -> tuple[str, str]:
-    # ponytail: Apple Music renders the same album link two different ways
-    # depending on which shelf it's in - "Title\n\xa0\nAlbum · Artist" in
-    # "Top Results", "Title\nTitle\n\nArtist" in the "Albums" grid. Both
-    # reduce to "first non-empty line is the title, last is the artist
-    # (stripping an 'Album · ' prefix if present)".
-    lines = [l.strip() for l in text.split("\n") if l.strip() and l.strip() != "\xa0"]
-    if not lines:
-        return "", ""
-    title = lines[0]
-    last = lines[-1]
-    artist = last.split("·")[-1].strip() if "·" in last else last
-    return title, artist
+def _artist_from_container(text: str) -> str:
+    # Apple Music's layout varies by shelf and viewport. The card text is
+    # "Title\nAlbum · Artist" (Top Results), "Title\nTitle\n\nArtist" (grid),
+    # or on some widths all on one line, separated by runs of spaces:
+    # "Title          Title          Artist". Splitting on newlines, "·" and
+    # runs of 2+ spaces leaves the artist as the last piece in every case.
+    pieces = [p.strip() for p in re.split(r"\n|·|\s{2,}", text)]
+    pieces = [p for p in pieces if p and p != "\xa0"]
+    return pieces[-1] if pieces else ""
 
 
 def search(artist: str, title: str) -> list[Candidate]:
@@ -47,11 +44,12 @@ def search(artist: str, title: str) -> list[Candidate]:
         candidates = []
         for link in page.query_selector_all(RESULT_SELECTOR):
             href = link.get_attribute("href")
+            # the album's cover link has no text, the title link next to it does
+            title_text = link.inner_text().strip()
+            if not href or not title_text:
+                continue
             container = link.evaluate_handle('e => e.closest("li") || e.parentElement.parentElement')
             el = container.as_element()
-            text = el.inner_text().strip() if el else ""
-            if not href or not text:
-                continue
-            title_text, artist_text = _extract_title_artist(text)
+            artist_text = _artist_from_container(el.inner_text() if el else "")
             candidates.append(Candidate(title=title_text, artist=artist_text, url=urljoin(ORIGIN, href)))
         return candidates
