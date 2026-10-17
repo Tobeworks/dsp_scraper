@@ -1,9 +1,8 @@
-"""Core orchestration: scrape Bandcamp, search every active platform, match."""
+"""Core orchestration: resolve the source URL, search every active platform, match."""
 import sys
 import time
 from dataclasses import asdict
 
-from dsp_scraper.bandcamp import scrape_release
 from dsp_scraper.matching import MatchResult, pick_best
 from dsp_scraper.platforms import (
     amazon_music,
@@ -13,6 +12,7 @@ from dsp_scraper.platforms import (
     soundcloud,
     spotify,
 )
+from dsp_scraper.sources import resolve_source
 
 # ponytail: youtube_music, tidal, napster, pandora are written and importable
 # (src/dsp_scraper/platforms/youtube_music.py etc.) but left out of the
@@ -33,24 +33,39 @@ PLATFORMS = {
 DEFAULT_PLATFORM_DELAY_SECONDS = 1.5  # ponytail: fixed default, overridable via --delay
 
 
-def find_release(bandcamp_url: str, platform_delay: float = DEFAULT_PLATFORM_DELAY_SECONDS) -> dict:
-    """Scrape Bandcamp + all active DSPs, return the finished result dict
-    (same shape as the JSON output). Does not write anything itself, but
-    prints progress. Sleeps `platform_delay` seconds between platform
-    searches (none before the first) so the active platforms aren't hit
-    back-to-back like a bot."""
+def find_release(source_url: str, platform_delay: float = DEFAULT_PLATFORM_DELAY_SECONDS) -> dict:
+    """Resolve the source URL (any supported platform, see sources.py), search
+    every active DSP except the source's own platform, return the finished
+    result dict (same shape as the JSON output). The source platform's entry
+    is the source URL itself at confidence 100, it is not searched. Does not
+    write anything itself, but prints progress. Sleeps `platform_delay`
+    seconds between actual platform searches (none before the first) so the
+    active platforms aren't hit back-to-back like a bot."""
     # ponytail: progress goes to stderr, not stdout - CLI --stdout must
     # produce nothing but the JSON on stdout so it stays pipeable (e.g.
     # into a DB writer), even though this same function is also used for
     # the file-output path where it wouldn't otherwise matter.
-    print(f"Scraping Bandcamp: {bandcamp_url}", file=sys.stderr)
-    release = scrape_release(bandcamp_url)  # fatal if this fails - nothing to search for
-    print(f"  -> {release.artist} - {release.title} ({release.release_type})", file=sys.stderr)
+    print(f"Resolving source: {source_url}", file=sys.stderr)
+    release = resolve_source(source_url)  # fatal if this fails - nothing to search for
+    print(f"  -> {release.artist} - {release.title} ({release.release_type}, {release.platform})", file=sys.stderr)
 
     results = {}
-    for i, (name, module) in enumerate(PLATFORMS.items()):
-        if i > 0:
+    searched_before = False
+    for name, module in PLATFORMS.items():
+        if name == release.platform:
+            results[name] = asdict(
+                MatchResult(
+                    url=release.url,
+                    matched_title=release.title,
+                    matched_artist=release.artist,
+                    confidence=100.0,
+                )
+            )
+            print(f"{name}: source platform, taken from source URL", file=sys.stderr)
+            continue
+        if searched_before:
             time.sleep(platform_delay)
+        searched_before = True
         print(f"Searching {name} ...", file=sys.stderr)
         try:
             candidates = module.search(release.artist, release.title)
@@ -63,4 +78,4 @@ def find_release(bandcamp_url: str, platform_delay: float = DEFAULT_PLATFORM_DEL
         results[name] = asdict(match)
         print(f"  -> {'matched' if match.url else f'no match ({match.error})'}", file=sys.stderr)
 
-    return {"source": {"platform": "bandcamp", **asdict(release)}, "results": results}
+    return {"source": asdict(release), "results": results}

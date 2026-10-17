@@ -1,20 +1,13 @@
 """Scrape a Bandcamp release page for artist/title/release_type."""
 import json
-from dataclasses import dataclass
 from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
+from dsp_scraper.types import ReleaseInfo
+
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-
-
-@dataclass
-class ReleaseInfo:
-    artist: str
-    title: str
-    release_type: str  # "album" | "track"
-    url: str
 
 
 def _release_type(url: str) -> str:

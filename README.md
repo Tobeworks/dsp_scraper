@@ -1,14 +1,39 @@
 # dsp_scraper
 
-Takes a Bandcamp release URL, finds the same release (artist + album/track)
-by scraping digital streaming platforms, and writes it all out as JSON —
-either to a file or to stdout (for piping into another tool, e.g. a DB
-writer).
+Takes a release URL from one streaming platform, finds the same release
+(artist + album/track) on the other platforms by scraping them, and writes
+it all out as JSON — either to a file or to stdout (for piping into another
+tool, e.g. a DB writer).
 
-This is the **first iteration** of a larger planned system. Deliberately
-kept minimal: no plugin registry, no abstract base classes, no real
-database — just the core algorithm (scrape Bandcamp → search DSPs → match →
-JSON) to build on later.
+Version 2.0: the starting point is no longer Bandcamp only. Supported source
+URLs are listed under [Supported source URLs](#supported-source-urls). The
+source platform itself is not searched, its entry is the source URL at
+confidence 100. This replaces Odesli (song.link) for our use case: no API key,
+no external service.
+
+Deliberately kept minimal: no plugin registry, no abstract base classes, no
+real database. Design and open phases are in
+[docs/specs/source-agnostic-lookup.md](docs/specs/source-agnostic-lookup.md).
+
+## Supported source URLs
+
+The URL you pass in decides the source platform. Each source is resolved to
+artist, title and release type, then searched on every other active
+platform.
+
+| Source | Example | Resolved via | Status |
+|---|---|---|---|
+| Bandcamp | `https://logicmoon.bandcamp.com/album/atlas` | JSON-LD / `og:title` | ✅ phase 1 |
+| Apple Music | `https://music.apple.com/us/album/<slug>/<id>` | `og:title` | ✅ phase 1 |
+| Deezer | `https://www.deezer.com/de/album/<id>` | `og:title` + `api.deezer.com` (no key) | ✅ phase 1, album URLs only |
+| SoundCloud | `https://soundcloud.com/<artist>/sets/<slug>` | `og:title` + URL slug | ✅ phase 1 (artist from slug, collab accounts may differ) |
+| Spotify | `https://open.spotify.com/album/<id>` | needs a browser | ⏳ phase 2 |
+| Beatport | `https://www.beatport.com/release/<slug>/<id>` | needs a browser (Cloudflare) | ⏳ phase 2 |
+| Smart links (too.fm etc.) | `https://too.fm/<id>` | needs a browser | ⏳ phase 2 |
+| Amazon Music | `https://music.amazon.com/albums/<id>` | not yet checked | ⏳ phase 2 |
+
+Any other host fails with an error that lists the supported hosts. Deezer
+track URLs and Spotify URLs are rejected for now, the error says so.
 
 ## Supported platforms
 
@@ -79,6 +104,9 @@ uv run cli.py
 
 # adjust the pause between platform searches (default: 1.5s)
 uv run cli.py --delay 3 https://logicmoon.bandcamp.com/album/atlas
+
+# any supported source URL works, e.g. Apple Music
+uv run cli.py --stdout https://music.apple.com/us/album/it-may-never-coming-back-single/6804971310
 ```
 
 Progress/status messages go to stderr, so `--stdout` always produces clean,
@@ -89,11 +117,11 @@ directly parseable JSON on stdout.
 ```json
 {
   "source": {
-    "platform": "bandcamp",
     "artist": "Logic Moon",
     "title": "Atlas",
     "release_type": "album",
-    "url": "https://logicmoon.bandcamp.com/album/atlas"
+    "url": "https://logicmoon.bandcamp.com/album/atlas",
+    "platform": "bandcamp"
   },
   "results": {
     "spotify": {
@@ -114,6 +142,11 @@ directly parseable JSON on stdout.
 }
 ```
 
+`source.platform` is the platform of the URL you passed in (`bandcamp`,
+`apple_music`, `deezer`, `soundcloud`). Before version 2.0 it was always
+`"bandcamp"`. The source platform's own entry is the source URL with
+`confidence` 100.0, it is not searched.
+
 Every platform always has the same 5 fields (`url`, `matched_title`,
 `matched_artist`, `confidence`, `error`), whether or not a match was found.
 
@@ -125,8 +158,17 @@ a future DB writer:
 ```python
 from dsp_scraper import find_release
 
-result = find_release("https://logicmoon.bandcamp.com/album/atlas")
+result = find_release("https://music.apple.com/us/album/it-may-never-coming-back-single/6804971310")
 # result is a dict in the schema above - write it to a DB here, for example
+```
+
+To resolve just the source URL without searching anything:
+
+```python
+from dsp_scraper.sources import resolve_source
+
+info = resolve_source("https://www.deezer.com/de/album/854570502")
+# info.artist, info.title, info.release_type, info.url, info.platform
 ```
 
 ## Architecture
@@ -138,7 +180,9 @@ dsp_scraper/
   src/dsp_scraper/
     __init__.py           # exposes find_release
     core.py                # find_release(), PLATFORMS
-    bandcamp.py            # scrape_release(url) -> ReleaseInfo
+    sources.py             # resolve_source(url) -> ReleaseInfo, one resolver per source host
+    types.py               # ReleaseInfo (artist, title, release_type, url, platform)
+    bandcamp.py            # scrape_release(url) -> ReleaseInfo (Bandcamp resolver)
     matching.py            # Candidate/MatchResult, score(), pick_best()
     platforms/
       _common.py             # shared Playwright new_page() context manager
@@ -147,10 +191,14 @@ dsp_scraper/
       youtube_music.py, tidal.py, napster.py, pandora.py
                               # written but disabled, see Supported platforms above
   tests/
+    test_sources.py        # offline unit tests: resolvers (saved fixtures, mocked HTTP) + source-platform handling in core
+    fixtures/              # saved <head> sections and Deezer API response for the offline tests
     test_bandcamp.py       # smoke test: bandcamp.py against 15 real Bandcamp URLs
     test_platform.py       # smoke test: one platform's search() against the same 15 releases
     test_full_pipeline.py  # smoke test: full find_release() (all active platforms) against the same 15
 ```
+
+Run the offline tests with `uv run tests/test_sources.py` (no network needed).
 
 Every platform module follows the same shape: a `search(artist: str, title:
 str) -> list[Candidate]` function that uses Playwright to open the

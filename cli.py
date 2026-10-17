@@ -1,4 +1,4 @@
-"""CLI: find a Bandcamp release on active DSPs and write/print the result as JSON."""
+"""CLI: find a release from a platform URL on the active DSPs and write/print the result as JSON."""
 import argparse
 import json
 import sys
@@ -7,8 +7,12 @@ from dsp_scraper.core import DEFAULT_PLATFORM_DELAY_SECONDS, find_release
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Find a Bandcamp release on other DSPs")
-    p.add_argument("bandcamp_url", nargs="?", help="Bandcamp release URL")
+    p = argparse.ArgumentParser(description="Find a release on other DSPs, starting from one platform URL")
+    p.add_argument(
+        "source_url",
+        nargs="?",
+        help="release URL on a supported platform: Bandcamp, Apple Music, Deezer (album), SoundCloud",
+    )
     p.add_argument("-o", "--output", default="results.json", help="output JSON file path")
     p.add_argument("--stdout", action="store_true", help="print JSON to stdout instead of writing a file")
     p.add_argument(
@@ -22,11 +26,15 @@ def parse_args():
 
 def main():
     args = parse_args()
-    url = args.bandcamp_url or input("Bandcamp release URL: ").strip()
+    url = args.source_url or input("Release URL: ").strip()
     if not url:
         sys.exit("no URL given")
 
-    result = find_release(url, platform_delay=args.delay)
+    try:
+        result = find_release(url, platform_delay=args.delay)
+    except (ValueError, RuntimeError) as exc:
+        # unsupported host / unreadable metadata: the message already says what to do
+        sys.exit(f"error: {exc}")
 
     if args.stdout:
         print(json.dumps(result, indent=2))
